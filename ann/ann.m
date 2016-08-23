@@ -88,6 +88,10 @@ eta      = 1.0;             % the learning rate
 N_layers = numel(L);
 J        = zeros(1, N_epochs);
 
+% Flat spot elimination helps Gradient Descent in very flat error
+% surface areas by suggesting some (fake) gradient to move along.
+fse      = 0.1;             % flat spot elimination amount
+
 for k=1:N_epochs            % ... for each training epoch ...
     
     % prepare space to store all the training activations
@@ -121,7 +125,8 @@ for k=1:N_epochs            % ... for each training epoch ...
         % calculate the error delta of the output layer
         % over all trainings examples (using the dot product)
         output_layer      = L{N_layers};
-        delta{N_layers}   = e * output_layer.dsigma( A{N_layers} );
+        gradient          = output_layer.dsigma( A{N_layers} ) + fse;
+        delta{N_layers}   = e * gradient;
 
         % calculate the error delta for all hidden layers
         for j=N_layers-1:-1:1
@@ -134,7 +139,7 @@ for k=1:N_epochs            % ... for each training epoch ...
             % connection weights to connected units.
             delta_k    = delta{j+1};
             theta_k    = next_layer.theta;
-            gradient   = current_layer.dsigma( A{j} );
+            gradient   = current_layer.dsigma( A{j} ) + fse;
             
             delta{j}   = (theta_k'  * delta_k) .* gradient;
         end
