@@ -2,7 +2,7 @@
 % regular multi-layer perceptrons.
 
 clear all;
-%rng(321);
+rng(3);
 
 % Learning XOR
 % ------------
@@ -83,8 +83,9 @@ end
 % ----------------
 
 threshold = 0.003;          % stop iterating when J < threshold
-N_epochs = 1e4;             % max. number of training rounds
-eta      = 1.0;             % the learning rate
+N_epochs = 2e4;             % max. number of training rounds
+M_epochs = 2e3;             % min. number of training rounds
+eta      = 1.;              % the learning rate
 N_layers = numel(L);
 J        = zeros(1, N_epochs);
 
@@ -102,7 +103,18 @@ for k=1:N_epochs            % ... for each training epoch ...
         Z{j} = nan(1, size(L{j}.theta, 1));
     end
     
-    for i=1:numel(X)        % for each training sample
+    % prepare the accumulated delta values
+    deltas_theta = cell(N_layers, 1);
+    deltas_bias  = cell(N_layers, 1);
+    for j=1:N_layers
+        deltas_theta{j} = zeros(size(L{j}.theta));
+        deltas_bias{j}  = zeros(size(L{j}.bias));
+    end
+    
+    % running batches of 10 (random) examples each
+    range = randi(numel(X), 1, 20);
+    
+    for i=range             % for each selected training sample
         z = X{i};
         for j=1:N_layers
             weights = L{j}.theta;
@@ -120,13 +132,20 @@ for k=1:N_epochs            % ... for each training epoch ...
         J(k) = J(k) + 0.5 * sum( e.^2 );       % cost function to minimize
         
         % prepare the delta values
-        delta   = cell(N_layers, 1);    % delta for the weights
+        delta = cell(N_layers, 1);             % delta for the weights
 
         % calculate the error delta of the output layer
         % over all trainings examples (using the dot product)
         output_layer      = L{N_layers};
         gradient          = output_layer.dsigma( A{N_layers} ) + fse;
         delta{N_layers}   = e * gradient;
+
+        % accumulate deltas over the complete batch
+        layer_input = Z{N_layers-1};
+        deltas_theta{N_layers} = ...
+            deltas_theta{N_layers} + delta{N_layers} * layer_input';
+        deltas_bias{N_layers} = ...
+            deltas_bias{N_layers} + delta{N_layers} * 1;
 
         % calculate the error delta for all hidden layers
         for j=N_layers-1:-1:1
@@ -142,27 +161,29 @@ for k=1:N_epochs            % ... for each training epoch ...
             gradient   = current_layer.dsigma( A{j} ) + fse;
             
             delta{j}   = (theta_k'  * delta_k) .* gradient;
-        end
-
-        % update the hidden and output layer weights
-        for j=2:N_layers          
-            nabla_theta = delta{j} * Z{j-1}';
-            nabla_bias  = delta{j} * 1;
             
-            L{j}.theta = L{j}.theta + eta * nabla_theta;
-            L{j}.bias  = L{j}.bias  + eta * nabla_bias;
+            % accumulate deltas over the complete batch
+            layer_input = X{i};
+            if j > 1
+                layer_input = Z{j-1};
+            end
+            deltas_theta{j} = deltas_theta{j} + delta{j} * layer_input';
+            deltas_bias{j}  = deltas_bias{j}  + delta{j} * 1;
         end
-
-        % update the first hidden layer weights
-        nabla_theta = delta{1} * X{i}';
-        nabla_bias  = delta{1} * 1;
         
-        L{1}.theta = L{1}.theta + eta * nabla_theta;
-        L{1}.bias  = L{1}.bias  + eta * nabla_bias;
+    end % for each training sample
+
+    % update the hidden and output layer weights
+    for j=1:N_layers          
+        L{j}.theta = L{j}.theta + eta * deltas_theta{j};
+        L{j}.bias  = L{j}.bias  + eta * deltas_bias{j};
     end
     
+    % adjust the cost for all samples
+    J(k) = J(k) / numel(range);
+    
     % assume J(theta) is still good here; early exit the process
-    if J(k) <= threshold
+    if (k >= M_epochs) && (J(k) <= threshold)
         J = J(1:k); % trim away unused slots
         break;
     end
