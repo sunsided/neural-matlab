@@ -1,4 +1,4 @@
-# MNIST CNN
+# Neural Networks in MATLAB
 
-Covolutional Neural Network zur Auswertung des MNIST-Datensatzes
+Experiments with Neural Networks in MATLAB.
 
