@@ -1,5 +1,5 @@
 % An artificial neural network example using
-% regular multi-layer perceptrons.
+% multi-layer perceptrons with sigmoidal activation.
 
 clear all;
 rng(3);
@@ -25,7 +25,7 @@ assert( numel(X) == numel(Y) );
 
 % This layer does not exist, since the "outgoing" connection weights
 % are encoded as part of the first hidden layer and the "input neurons"
-% just act as identities.
+% would just act as identities.
   
 
 % The (first and only) hidden layer
