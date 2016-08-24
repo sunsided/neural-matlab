@@ -84,14 +84,23 @@ end
 
 threshold = 0.003;          % stop iterating when J < threshold
 N_epochs = 2e4;             % max. number of training rounds
-M_epochs = 2e3;             % min. number of training rounds
+M_epochs = 3e2;             % min. number of training rounds
 eta      = 1.;              % the learning rate
+my       = 0.1;             % momentum of the learning rate
 N_layers = numel(L);
 J        = zeros(1, N_epochs);
 
 % Flat spot elimination helps Gradient Descent in very flat error
 % surface areas by suggesting some (fake) gradient to move along.
 fse      = 0.1;             % flat spot elimination amount
+
+% previous delta values for momentum descent
+prev_deltas_theta = cell(N_layers, 1);
+prev_deltas_bias  = cell(N_layers, 1);
+for j=1:N_layers
+    prev_deltas_theta{j} = zeros(size(L{j}.theta));
+    prev_deltas_bias{j}  = zeros(size(L{j}.bias));
+end
 
 for k=1:N_epochs            % ... for each training epoch ...
     
@@ -175,9 +184,15 @@ for k=1:N_epochs            % ... for each training epoch ...
 
     % update the hidden and output layer weights
     for j=1:N_layers          
-        L{j}.theta = L{j}.theta + eta * deltas_theta{j};
-        L{j}.bias  = L{j}.bias  + eta * deltas_bias{j};
+        L{j}.theta = L{j}.theta + eta * deltas_theta{j} ...
+                                + my * prev_deltas_theta{j};
+        L{j}.bias  = L{j}.bias  + eta * deltas_bias{j} ...
+                                + my * deltas_bias{j};
     end
+    
+    % keeping the current values for momentum-based descent
+    prev_deltas_theta = deltas_theta;
+    prev_deltas_bias = deltas_bias;
     
     % adjust the cost for all samples
     J(k) = J(k) / numel(range);
@@ -212,7 +227,7 @@ end
 
 close all;
 figure;
-plot(J);
+plot(J); hold on;
 ylabel('J(\theta)'); xlabel('Generation');
 ylim([0 max(J)]);
 xlim([0 numel(J)]);
