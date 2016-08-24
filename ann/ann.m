@@ -94,33 +94,35 @@ J        = zeros(1, N_epochs);
 % surface areas by suggesting some (fake) gradient to move along.
 fse      = 0.1;             % flat spot elimination amount
 
-% previous delta values for momentum descent
-prev_deltas_theta = cell(N_layers, 1);
-prev_deltas_bias  = cell(N_layers, 1);
+% We are keeping the previous delta values for momentum descent.
+prev_change_theta = cell(N_layers, 1);
+prev_change_bias  = cell(N_layers, 1);
 for j=1:N_layers
-    prev_deltas_theta{j} = zeros(size(L{j}.theta));
-    prev_deltas_bias{j}  = zeros(size(L{j}.bias));
+    prev_change_theta{j} = zeros(size(L{j}.theta));
+    prev_change_bias{j}  = zeros(size(L{j}.bias));
 end
 
 for k=1:N_epochs            % ... for each training epoch ...
     
     % prepare space to store all the training activations
+    % required during the backpropagation step
     A = cell(N_layers, 1);
     Z = cell(N_layers, 1);
     for j=1:N_layers
         A{j} = nan(1, size(L{j}.theta, 1));
-        Z{j} = nan(1, size(L{j}.theta, 1));
+        Out{j} = nan(1, size(L{j}.theta, 1));
     end
     
     % prepare the accumulated delta values
-    deltas_theta = cell(N_layers, 1);
-    deltas_bias  = cell(N_layers, 1);
+    change_theta = cell(N_layers, 1);
+    change_bias  = cell(N_layers, 1);
     for j=1:N_layers
-        deltas_theta{j} = zeros(size(L{j}.theta));
-        deltas_bias{j}  = zeros(size(L{j}.bias));
+        change_theta{j} = zeros(size(L{j}.theta));
+        change_bias{j}  = zeros(size(L{j}.bias));
     end
     
-    % running batches of 10 (random) examples each
+    % running batches of 10 (random) examples each;
+    % this makes this approach a Stochastic Gradient Descent.
     range = randi(numel(X), 1, 20);
     
     for i=range             % for each selected training sample
@@ -149,12 +151,15 @@ for k=1:N_epochs            % ... for each training epoch ...
         gradient          = output_layer.dsigma( A{N_layers} ) + fse;
         delta{N_layers}   = e * gradient;
 
-        % accumulate deltas over the complete batch
+        % accumulate deltas over the complete batch.
+        % The weight change is given as 
+        %   dw = delta * input
+        % where the input is the output of the previous layer.
         layer_input = Z{N_layers-1};
-        deltas_theta{N_layers} = ...
-            deltas_theta{N_layers} + delta{N_layers} * layer_input';
-        deltas_bias{N_layers} = ...
-            deltas_bias{N_layers} + delta{N_layers} * 1;
+        change_theta{N_layers} = change_theta{N_layers} ...
+                               + delta{N_layers} * layer_input';
+        change_bias{N_layers} = change_bias{N_layers} ...
+                               + delta{N_layers} * 1;
 
         % calculate the error delta for all hidden layers
         for j=N_layers-1:-1:1
@@ -171,28 +176,29 @@ for k=1:N_epochs            % ... for each training epoch ...
             
             delta{j}   = (theta_k'  * delta_k) .* gradient;
             
-            % accumulate deltas over the complete batch
+            % accumulate deltas over the complete batch;
+            % the input of the first layer is the actual training input.
             layer_input = X{i};
             if j > 1
                 layer_input = Z{j-1};
             end
-            deltas_theta{j} = deltas_theta{j} + delta{j} * layer_input';
-            deltas_bias{j}  = deltas_bias{j}  + delta{j} * 1;
+            change_theta{j} = change_theta{j} + delta{j} * layer_input';
+            change_bias{j}  = change_bias{j}  + delta{j} * 1;
         end
         
     end % for each training sample
 
     % update the hidden and output layer weights
     for j=1:N_layers          
-        L{j}.theta = L{j}.theta + eta * deltas_theta{j} ...
-                                + my * prev_deltas_theta{j};
-        L{j}.bias  = L{j}.bias  + eta * deltas_bias{j} ...
-                                + my * deltas_bias{j};
+        L{j}.theta = L{j}.theta + eta * change_theta{j} ...
+                                +  my * prev_change_theta{j};
+        L{j}.bias  = L{j}.bias  + eta * change_bias{j} ...
+                                +  my * prev_change_bias{j};
     end
     
     % keeping the current values for momentum-based descent
-    prev_deltas_theta = deltas_theta;
-    prev_deltas_bias = deltas_bias;
+    prev_change_theta = change_theta;
+    prev_change_bias = change_bias;
     
     % adjust the cost for all samples
     J(k) = J(k) / numel(range);
