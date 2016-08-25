@@ -64,16 +64,9 @@ L{2}         = struct(...
 disp('Untrained network:');
 
 for i=1:numel(X)     % ... for each training sample ...
-    z = X{i};        % The first layer's activation is the network input.
-
-    for j=1:numel(L) % ... for each network layer sample ...
-        weights = L{j}.theta;
-        bias    = L{j}.bias;
-        sigma   = L{j}.sigma;
-        
-        a = weights * z + bias;
-        z = sigma(a);
-    end
+    
+    x = X{i};
+    z = feedforward(L, x);
     
     disp([ '  h( ' mat2str(X{i}) ' ) = ' mat2str(z) ]);
 end
