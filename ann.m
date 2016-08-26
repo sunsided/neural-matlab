@@ -136,7 +136,7 @@ for k=1:N_epochs_max
         
         % evaluate the cost function
         cost = J(e);
-        assert(isfinite(j));
+        assert(isfinite(cost));
         
         % perform the error backpropagation
         [weight_changes, ~] = backpropagate(dJ, L, results, e, 'fse', fse);       
