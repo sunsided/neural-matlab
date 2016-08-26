@@ -1,5 +1,4 @@
-% An artificial neural network example using
-% multi-layer perceptrons with sigmoidal activation.
+% A multi-layered artificial neural network example
 
 clear all;
 %rng(3);
