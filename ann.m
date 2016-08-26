@@ -140,7 +140,7 @@ gradient_descent = accelerated_gradient_descent( ...
                 
 % Flat spot elimination helps Gradient Descent in very flat error
 % surface areas by suggesting some (fake) gradient to move along.
-fse          = 0.1;            % flat spot elimination amount
+fse          = 0.0;            % flat spot elimination amount, e.g. 0.1
 
 % track the costs for evaluation of the learning curve
 costs = nan(N_epochs_max, 1);
