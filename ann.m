@@ -88,16 +88,16 @@ end
 
 threshold    = 0.003;           % stop iterating when J < threshold
 N_epochs_max = 2e4;             % max. number of training rounds
-N_epochs_min = 3e2;             % min. number of training rounds
+N_epochs_min = 3e3;             % min. number of training rounds
 
-eta          = 1.0;             % the learning rate
-my           = 0.3;             % momentum of the learning rate
+eta          = 0.1;             % the learning rate
+my           = 0.000;             % momentum of the learning rate
 
 N_layers     = numel(L);
 
 % Flat spot elimination helps Gradient Descent in very flat error
 % surface areas by suggesting some (fake) gradient to move along.
-fse          = 0.1;            % flat spot elimination amount
+fse          = 0.0;            % flat spot elimination amount
 
 % We are keeping the previous delta values for momentum descent.
 previous_weight_changes = cell(N_layers, 1);
@@ -108,7 +108,8 @@ end
 % track the costs for evaluation of the learning curve
 costs = nan(N_epochs_max, 1);
 
-
+total_duration = tic;
+tic;
 for k=1:N_epochs_max
 
 
@@ -140,14 +141,14 @@ for k=1:N_epochs_max
         assert(isfinite(j));
         
         % perform the error backpropagation
-        [weight_changes, ~] = backpropagate(L, results, e, 'fse', fse);       
+        [weight_changes, ~] = backpropagate(dJ, L, results, e, 'fse', fse);       
         training_results{t} = struct( ...
             'cost', cost, ...
             'weight_changes', {weight_changes} ...                         % TODO: capital-letter Delta
             );
 
         clear cost weight_changes;
-    
+            
     end % for each training example
 
 
@@ -180,10 +181,22 @@ for k=1:N_epochs_max
         'UniformOutput', false);
     
     % check the change in cost and terminate if it doesn't move
-    if k > N_epochs_min && costs(k) < costs(k-1) && (costs(k-1) - costs(k)) < 1E-6
+    if (k > N_epochs_min) && ...
+       (costs(k) < costs(k-1)) && ...
+       ((costs(k-1) - costs(k)) < threshold)
+   
+        disp('Cost change less than threshold; aborting.');
         break;
     end
 
+    % waiting aid
+    elapsed = toc;
+    if elapsed >= 5
+        tic;
+        disp(['Elapsed: ' num2str(toc(total_duration)) 's, ' ...
+              'J(theta) = ' num2str(costs(k))]);
+    end
+    
     
     % Gradient Descent
     % ----------------
