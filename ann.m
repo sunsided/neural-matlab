@@ -237,8 +237,8 @@ for k=1:N_epochs_max
     end
     
     
-    % Gradient Descent
-    % ----------------
+    % Gradient Descent on the network's parameters
+    % --------------------------------------------
 
     L = gradient_descent(L, weight_changes);
 
