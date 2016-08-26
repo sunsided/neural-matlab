@@ -23,7 +23,7 @@ assert( numel(X) == numel(Y) );
 % The cost function
 % -----------------
 
-J  = @(e) (1/2) * (1/numel(e)) * sum(e.^2);     % sum of squared errors
+J  = @(e) (1/numel(e)) * (1/2) * sum(e.^2);     % sum of squared errors
 dJ = @(e) (1/numel(e)) * sum(e);                % derivative of J
 
   
@@ -41,17 +41,17 @@ dJ = @(e) (1/numel(e)) * sum(e);                % derivative of J
 % weights to be applied.
 
 N_inputs     = numel(X{1});
-N_neurons    = 2;
+N_outputs    = 2;
 activation   = @(z) 1./(1+exp(-z)); % logistic function
 d_activation = @(z) activation(z).*(1-activation(z));
 %activation   = @(z) max(0, z);     % ReLU
 %d_activation = @(z) double(z > 0);
 L{1}         = struct(...
-                'theta',  0.05*randn(N_neurons, 1 + N_inputs), ...
+                'theta',  0.05*randn(N_outputs, 1 + N_inputs), ...
                 'sigma',  activation, ...
                 'dsigma', d_activation ...
                 );
-
+            
             
 % The output layer
 % ----------------
@@ -59,11 +59,11 @@ L{1}         = struct(...
 % weights to be applied.
 
 N_inputs     = size(L{1}.theta, 1); % no. inputs is no. previous outputs
-N_neurons    = 1;
+N_outputs    = 1;
 activation   = L{1}.sigma;          % using the same activation function
 d_activation = L{1}.dsigma;
 L{2}         = struct(...
-                'theta',  0.05*randn(N_neurons, 1 + N_inputs), ...
+                'theta',  0.05*randn(N_outputs, 1 + N_inputs), ...
                 'sigma',  activation, ...
                 'dsigma', d_activation ...
                 );
@@ -86,28 +86,26 @@ end
 % Network training
 % ----------------
 
-threshold    = 0.003;           % stop iterating when J < threshold
+N_layers     = numel(L);
+
+threshold    = 1E-5;            % stop iterating when delta J < threshold
 N_epochs_max = 2e4;             % max. number of training rounds
 N_epochs_min = 3e3;             % min. number of training rounds
 
-eta          = 0.1;             % the learning rate
-my           = 0.000;             % momentum of the learning rate
-
-N_layers     = numel(L);
+% Select the gradient descent algorithm
+gradient_descent = momentum_gradient_descent( ...
+                    L, ...
+                    'learning_rate', 1.0, ...
+                    'momentum', 0.1);
 
 % Flat spot elimination helps Gradient Descent in very flat error
 % surface areas by suggesting some (fake) gradient to move along.
-fse          = 0.0;            % flat spot elimination amount
-
-% We are keeping the previous delta values for momentum descent.
-previous_weight_changes = cell(N_layers, 1);
-for j=1:N_layers
-    previous_weight_changes{j} = zeros(size(L{j}.theta));
-end
+fse          = 0.1;            % flat spot elimination amount
 
 % track the costs for evaluation of the learning curve
 costs = nan(N_epochs_max, 1);
 
+% execute the training epochs
 total_duration = tic;
 tic;
 for k=1:N_epochs_max
@@ -193,7 +191,8 @@ for k=1:N_epochs_max
     elapsed = toc;
     if elapsed >= 5
         tic;
-        disp(['Elapsed: ' num2str(toc(total_duration)) 's, ' ...
+        disp(['duration ' num2str(toc(total_duration)) 's, ' ...
+              'gen ' num2str(k) ', ' ...
               'J(theta) = ' num2str(costs(k))]);
     end
     
@@ -201,14 +200,7 @@ for k=1:N_epochs_max
     % Gradient Descent
     % ----------------
 
-    for l=1:numel(L)
-        L{l}.theta = L{l}.theta ...
-            - eta * weight_changes{l} ...
-            -  my * previous_weight_changes{l};
-        
-        % Store the delta as the previous delta for momentum descent
-        previous_weight_changes{l} = weight_changes{l};
-    end
+    L = gradient_descent(L, weight_changes);
 
 end % for k epochs
 
