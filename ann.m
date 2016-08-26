@@ -42,8 +42,10 @@ dJ = @(e) (1/numel(e)) * sum(e);                % derivative of J
 
 N_inputs     = numel(X{1});
 N_neurons    = 2;
-activation   = @(a) 1./(1+exp(-a)); % logistic function
-d_activation = @(a) activation(a).*(1-activation(a));
+activation   = @(z) 1./(1+exp(-z)); % logistic function
+d_activation = @(z) activation(z).*(1-activation(z));
+%activation   = @(z) max(0, z);     % ReLU
+%d_activation = @(z) double(z > 0);
 L{1}         = struct(...
                 'theta',  0.05*randn(N_neurons, 1 + N_inputs), ...
                 'sigma',  activation, ...
@@ -85,17 +87,17 @@ end
 % ----------------
 
 threshold    = 0.003;           % stop iterating when J < threshold
-N_epochs_max = 2e3;             % max. number of training rounds
+N_epochs_max = 2e4;             % max. number of training rounds
 N_epochs_min = 3e2;             % min. number of training rounds
 
-eta          = 5.1;             % the learning rate
-my           = 0.1;             % momentum of the learning rate
+eta          = 1.0;             % the learning rate
+my           = 0.3;             % momentum of the learning rate
 
 N_layers     = numel(L);
 
 % Flat spot elimination helps Gradient Descent in very flat error
 % surface areas by suggesting some (fake) gradient to move along.
-fse      = 0.1;             % flat spot elimination amount
+fse          = 0.1;            % flat spot elimination amount
 
 % We are keeping the previous delta values for momentum descent.
 previous_weight_changes = cell(N_layers, 1);
@@ -166,7 +168,7 @@ for k=1:N_epochs_max
             downstream_layer   = downstream_result.layer;
             downstream_weights = downstream_layer.theta(:, 2:end);             % NOTE! removing the bias!
 
-            activation_gradient = layer.dsigma( net )  + fse   ;              % TODO: add fse                                                                       
+            activation_gradient = layer.dsigma( net ) + fse;
             delta   = (downstream_weights' * e) .* activation_gradient;        % TODO: explain, e.g. http://stats.stackexchange.com/a/130605/26843
 
             % collect the delta for backpropagation 
@@ -221,17 +223,19 @@ for k=1:N_epochs_max
     % normalize the cost
     cost     = cost / numel(training_results);
     costs(k) = cost;
-
+    
+    
     % normalize the gradients
     for w=1:numel(L)
         weight_changes{w} = weight_changes{w} / numel(training_results);
     end
 
+    % check the change in cost and terminate if it doesn't move
+    if k > N_epochs_min && cost < costs(k-1) && (costs(k-1) - cost) < 1E-6
+        break;
+    end
 
-
-    % TODO: check the change in cost and terminate if it doesn't move
-
-
+    
     % Gradient Descent
     % ----------------
 
@@ -241,7 +245,7 @@ for k=1:N_epochs_max
             -  my * previous_weight_changes{l};
         
         % Store the delta as the previous delta for momentum descent
-        previous_weight_changes{l} = eta * weight_changes{l};
+        previous_weight_changes{l} = weight_changes{l};
     end
 
 end % for k epochs
