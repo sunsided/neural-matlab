@@ -134,61 +134,16 @@ for k=1:N_epochs_max
 
         % determine the network's error on the current example
         e = a - y;
-
-        % prepare the error deltas and gradients
-        deltas          = cell(numel(L), 1);
-        weight_changes  = cell(numel(L), 1);
-
-        % calculate the error gradient on the network's output layer
-        network_results = results{end};
-        deltas{end}     = e;                                                   
-        weight_changes{end} = e * network_results.input';
-
-        clear network_results;
-
+        
         % evaluate the cost function
         cost = J(e);
         assert(isfinite(j));
-
-        % perform the actual backpropagation
-        for j = numel(L)-1 : -1 : 1
-
-            % obtain the current layer's error;
-            % since we start with the output layer, this is the network error.
-            e       = deltas{j+1};
-
-            % obtain the results of the forward propagation
-            result  = results{j};
-            layer   = result.layer;
-            net     = result.net;                                              % TODO: find a better name here
-            input   = result.input;                                            % TODO: find a better name here
-
-            % obtain the results of the following layer
-            downstream_result  = results{j+1};
-            downstream_layer   = downstream_result.layer;
-            downstream_weights = downstream_layer.theta(:, 2:end);             % NOTE! removing the bias!
-
-            activation_gradient = layer.dsigma( net ) + fse;
-            delta   = (downstream_weights' * e) .* activation_gradient;        % TODO: explain, e.g. http://stats.stackexchange.com/a/130605/26843
-
-            % collect the delta for backpropagation 
-            % to the preceding layer
-            deltas{j} = delta;
-
-            % calculate the weight change
-            weight_changes{j} = delta * input';
-
-            clear e result layer net input;
-            clear downstream_result downstream_layer downstream_weights;
-            clear activation_gradient delta;
-        end
-
-        % deltas are only required for backpropagation
-        clear deltas;
-
+        
+        % perform the error backpropagation
+        [weight_changes, ~] = backpropagate(L, results, e, 'fse', fse);       
         training_results{t} = struct( ...
             'cost', cost, ...
-            'weight_changes', {weight_changes} ...     % capital-letter Delta
+            'weight_changes', {weight_changes} ...                         % TODO: capital-letter Delta
             );
 
         clear cost weight_changes;
@@ -200,38 +155,32 @@ for k=1:N_epochs_max
     % weight changes over all training examples
     % --------------------------------------------------
 
-    cost = 0;
-    weight_changes = cell(numel(L), 1);
-
+    % sum all the costs an normalize by number of training results
+    N_results = numel(training_results);
+    costs(k) = sum( cellfun(@(r) r.cost, training_results) ) / N_results;
+    
     % initialize the cumulative weight changes to zero
-    for t=1:numel(L)
-        weight_changes{t} = zeros(size(L{t}.theta));
-    end
+    weight_changes = cellfun( ...
+        @(L) zeros( size(L.theta) ), ...
+        L, ...
+        'UniformOutput', false);
 
+    % sum each layer's weight changes over all training results
     for t=1:numel(training_results)
-
-        % for each layer, accumulate the weight change
+        result = training_results{t};
         for w=1:numel(L)
-            weight_changes{w} = weight_changes{w} + training_results{t}.weight_changes{w};
+            weight_changes{w} = weight_changes{w} + result.weight_changes{w};
         end
-
-        % also sum the costs
-        cost = cost + training_results{t}.cost;
-
     end
 
-    % normalize the cost
-    cost     = cost / numel(training_results);
-    costs(k) = cost;
+    % normalize the weight changes over all results
+    weight_changes = cellfun(...
+        @(w) w / N_results, ...
+        weight_changes, ...
+        'UniformOutput', false);
     
-    
-    % normalize the gradients
-    for w=1:numel(L)
-        weight_changes{w} = weight_changes{w} / numel(training_results);
-    end
-
     % check the change in cost and terminate if it doesn't move
-    if k > N_epochs_min && cost < costs(k-1) && (costs(k-1) - cost) < 1E-6
+    if k > N_epochs_min && costs(k) < costs(k-1) && (costs(k-1) - costs(k)) < 1E-6
         break;
     end
 
