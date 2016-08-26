@@ -79,10 +79,10 @@ dJ = @(e) (1/numel(e)) * sum(e);                % derivative of J
 
 N_inputs     = numel(X{1});
 N_outputs    = 4;
-activation   = @(z) 1./(1+exp(-z)); % logistic function
-d_activation = @(z) activation(z).*(1-activation(z));
-%activation   = @(z) max(0, z);     % ReLU
-%d_activation = @(z) double(z > 0);
+%activation   = @(z) 1./(1+exp(-z)); % logistic function
+%d_activation = @(z) activation(z).*(1-activation(z));
+activation   = @(z) max(0, z);     % ReLU
+d_activation = @(z) double(z > 0);
 L{1}         = struct(...
                 'theta',  0.05*randn(N_outputs, 1 + N_inputs), ...
                 'sigma',  activation, ...
