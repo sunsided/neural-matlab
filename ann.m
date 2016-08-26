@@ -4,15 +4,52 @@
 clear all;
 %rng(3);
 
-% Learning XOR
-% ------------
+% Learning Boolean functions
+% --------------------------
 
-X = { [0; 0]; 
-      [1; 0]; 
-      [0; 1]; 
-      [1; 1] };
+% 0 0 = OR
+% 0 1 = AND
+% 1 0 = XOR
+% 1 1 = NAND
+
+X = { % XOR examples
+      [1; 0;    0; 0]; 
+      [1; 0;    1; 0]; 
+      [1; 0;    0; 1]; 
+      [1; 0;    1; 1];
+      % OR examples
+      [0; 0;    0; 0]; 
+      [0; 0;    1; 0]; 
+      [0; 0;    0; 1]; 
+      [0; 0;    1; 1];
+      % AND examples
+      [0; 1;    0; 0]; 
+      [0; 1;    1; 0]; 
+      [0; 1;    0; 1]; 
+      [0; 1;    1; 1];
+      % NAND examples
+      [1; 1;    0; 0]; 
+      [1; 1;    1; 0]; 
+      [1; 1;    0; 1]; 
+      [1; 1;    1; 1] };
   
-Y = { 0;
+Y = { % XOR examples
+      0;
+      1;
+      1;
+      0;
+      % OR examples
+      0;
+      1;
+      1;
+      1;
+      % AND examples
+      0;
+      0;
+      0;
+      1;
+      % NAND examples
+      1;
       1;
       1;
       0 };
@@ -41,7 +78,7 @@ dJ = @(e) (1/numel(e)) * sum(e);                % derivative of J
 % weights to be applied.
 
 N_inputs     = numel(X{1});
-N_outputs    = 2;
+N_outputs    = 4;
 activation   = @(z) 1./(1+exp(-z)); % logistic function
 d_activation = @(z) activation(z).*(1-activation(z));
 %activation   = @(z) max(0, z);     % ReLU
