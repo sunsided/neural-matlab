@@ -2,7 +2,7 @@
 % multi-layer perceptrons with sigmoidal activation.
 
 clear all;
-rng(3);
+%rng(3);
 
 % Learning XOR
 % ------------
@@ -19,6 +19,13 @@ Y = { 0;
 
 assert( numel(X) == numel(Y) );
 
+
+% The cost function
+% -----------------
+
+J  = @(e) (1/2) * (1/numel(e)) * sum(e.^2);     % sum of squared errors
+dJ = @(e) (1/numel(e)) * sum(e);                % derivative of J
+
   
 % The "input layer"
 % -----------------
@@ -28,16 +35,17 @@ assert( numel(X) == numel(Y) );
 % would just act as identities.
   
 
-% The (first and only) hidden layer
-% ---------------------------------
+% The first hidden layer
+% ----------------------
+% The first column in the weight matrix theta consists of the bias
+% weights to be applied.
 
 N_inputs     = numel(X{1});
 N_neurons    = 2;
 activation   = @(a) 1./(1+exp(-a)); % logistic function
 d_activation = @(a) activation(a).*(1-activation(a));
 L{1}         = struct(...
-                'theta',  0.05*randn(N_neurons, N_inputs), ...
-                'bias',   0.05*randn(N_neurons, 1), ...
+                'theta',  0.05*randn(N_neurons, 1 + N_inputs), ...
                 'sigma',  activation, ...
                 'dsigma', d_activation ...
                 );
@@ -45,14 +53,15 @@ L{1}         = struct(...
             
 % The output layer
 % ----------------
+% The first column in the weight matrix theta consists of the bias
+% weights to be applied.
 
 N_inputs     = size(L{1}.theta, 1); % no. inputs is no. previous outputs
 N_neurons    = 1;
 activation   = L{1}.sigma;          % using the same activation function
 d_activation = L{1}.dsigma;
 L{2}         = struct(...
-                'theta',  0.05*randn(N_neurons, N_inputs), ...
-                'bias',   0.05*randn(N_neurons, 1), ...
+                'theta',  0.05*randn(N_neurons, 1 + N_inputs), ...
                 'sigma',  activation, ...
                 'dsigma', d_activation ...
                 );
@@ -63,145 +72,180 @@ L{2}         = struct(...
 
 disp('Untrained network:');
 
-for i=1:numel(X)     % ... for each training sample ...
+for t=1:numel(X)     % ... for each training sample ...
     
-    x = X{i};
-    z = feedforward(L, x);
+    x = X{t};
+    a = feedforward(L, x);
     
-    disp([ '  h( ' mat2str(X{i}) ' ) = ' mat2str(z) ]);
+    disp([ '  h( ' mat2str(X{t}) ' ) = ' mat2str(a) ]);
 end
 
 
 % Network training
 % ----------------
 
-threshold = 0.003;          % stop iterating when J < threshold
-N_epochs = 2e4;             % max. number of training rounds
-M_epochs = 3e2;             % min. number of training rounds
-eta      = 1.;              % the learning rate
-my       = 0.1;             % momentum of the learning rate
-N_layers = numel(L);
-J        = zeros(1, N_epochs);
+threshold    = 0.003;           % stop iterating when J < threshold
+N_epochs_max = 2e3;             % max. number of training rounds
+N_epochs_min = 3e2;             % min. number of training rounds
+
+eta          = 5.1;             % the learning rate
+my           = 0.1;             % momentum of the learning rate
+
+N_layers     = numel(L);
 
 % Flat spot elimination helps Gradient Descent in very flat error
 % surface areas by suggesting some (fake) gradient to move along.
 fse      = 0.1;             % flat spot elimination amount
 
 % We are keeping the previous delta values for momentum descent.
-prev_change_theta = cell(N_layers, 1);
-prev_change_bias  = cell(N_layers, 1);
+previous_weight_changes = cell(N_layers, 1);
 for j=1:N_layers
-    prev_change_theta{j} = zeros(size(L{j}.theta));
-    prev_change_bias{j}  = zeros(size(L{j}.bias));
+    previous_weight_changes{j} = zeros(size(L{j}.theta));
 end
 
-for k=1:N_epochs            % ... for each training epoch ...
-    
-    % prepare space to store all the training activations
-    % required during the backpropagation step
-    A = cell(N_layers, 1);
-    Z = cell(N_layers, 1);
-    for j=1:N_layers
-        A{j} = nan(1, size(L{j}.theta, 1));
-        Out{j} = nan(1, size(L{j}.theta, 1));
-    end
-    
-    % prepare the accumulated delta values
-    change_theta = cell(N_layers, 1);
-    change_bias  = cell(N_layers, 1);
-    for j=1:N_layers
-        change_theta{j} = zeros(size(L{j}.theta));
-        change_bias{j}  = zeros(size(L{j}.bias));
-    end
-    
-    % running batches of 10 (random) examples each;
+% track the costs for evaluation of the learning curve
+costs = nan(N_epochs_max, 1);
+
+
+for k=1:N_epochs_max
+
+
+    % running batches of Q randomly chosen examples (per epoch);
     % this makes this approach a Stochastic Gradient Descent.
-    range = randi(numel(X), 1, 20);
-    
-    for i=range             % for each selected training sample
-        z = X{i};
-        for j=1:N_layers
-            weights = L{j}.theta;
-            bias    = L{j}.bias;
-            sigma   = L{j}.sigma;
-            
-            a = weights * z + bias;                      
-            z = sigma( a );
-            
-            A{j} = a;       % store the activation for later
-            Z{j} = z;       % store the output for later
+    Q = 20;
+    range = randi(numel(X), 1, Q);
+    %range = mod(k-1, numel(X))+1;
+
+    % for batch training, we need to gather the training results
+    % in order to process them collectively.
+    training_results = cell(numel(range), 1);
+
+    for t = 1:numel(range) % ... for each training sample
+
+        % pick a training example
+        x = X{range(t)}; % network inputs of the current example
+        y = Y{range(t)}; % ground truth of the network output (i.e. expected result)
+
+        % perform a feedforward pass but keep around the information
+        % about layer inputs and activations.
+        [a, results] = feedforward_for_training(L, x);
+
+        % determine the network's error on the current example
+        e = a - y;
+
+        % prepare the error deltas and gradients
+        deltas          = cell(numel(L), 1);
+        weight_changes  = cell(numel(L), 1);
+
+        % calculate the error gradient on the network's output layer
+        network_results = results{end};
+        deltas{end}     = e;                                                   
+        weight_changes{end} = e * network_results.input';
+
+        clear network_results;
+
+        % evaluate the cost function
+        cost = J(e);
+        assert(isfinite(j));
+
+        % perform the actual backpropagation
+        for j = numel(L)-1 : -1 : 1
+
+            % obtain the current layer's error;
+            % since we start with the output layer, this is the network error.
+            e       = deltas{j+1};
+
+            % obtain the results of the forward propagation
+            result  = results{j};
+            layer   = result.layer;
+            net     = result.net;                                              % TODO: find a better name here
+            input   = result.input;                                            % TODO: find a better name here
+
+            % obtain the results of the following layer
+            downstream_result  = results{j+1};
+            downstream_layer   = downstream_result.layer;
+            downstream_weights = downstream_layer.theta(:, 2:end);             % NOTE! removing the bias!
+
+            activation_gradient = layer.dsigma( net )  + fse   ;              % TODO: add fse                                                                       
+            delta   = (downstream_weights' * e) .* activation_gradient;        % TODO: explain, e.g. http://stats.stackexchange.com/a/130605/26843
+
+            % collect the delta for backpropagation 
+            % to the preceding layer
+            deltas{j} = delta;
+
+            % calculate the weight change
+            weight_changes{j} = delta * input';
+
+            clear e result layer net input;
+            clear downstream_result downstream_layer downstream_weights;
+            clear activation_gradient delta;
         end
 
-        e    = Y{i} - Z{N_layers};
-        J(k) = J(k) + 0.5 * sum( e.^2 );       % cost function to minimize
-        
-        % prepare the delta values
-        delta = cell(N_layers, 1);             % delta for the weights
+        % deltas are only required for backpropagation
+        clear deltas;
 
-        % calculate the error delta of the output layer
-        % over all trainings examples (using the dot product)
-        output_layer      = L{N_layers};
-        gradient          = output_layer.dsigma( A{N_layers} ) + fse;
-        delta{N_layers}   = e * gradient;
+        training_results{t} = struct( ...
+            'cost', cost, ...
+            'weight_changes', {weight_changes} ...     % capital-letter Delta
+            );
 
-        % accumulate deltas over the complete batch.
-        % The weight change is given as 
-        %   dw = delta * input
-        % where the input is the output of the previous layer.
-        layer_input = Z{N_layers-1};
-        change_theta{N_layers} = change_theta{N_layers} ...
-                               + delta{N_layers} * layer_input';
-        change_bias{N_layers} = change_bias{N_layers} ...
-                               + delta{N_layers} * 1;
+        clear cost weight_changes;
+    
+    end % for each training example
 
-        % calculate the error delta for all hidden layers
-        for j=N_layers-1:-1:1
-            current_layer = L{j};
-            next_layer    = L{j+1};
-            
-            % the inputs in the following neurons are affected through
-            % our activation function; we thus use its gradient to
-            % determine the influence on the error created by each
-            % connection weights to connected units.
-            delta_k    = delta{j+1};
-            theta_k    = next_layer.theta;
-            gradient   = current_layer.dsigma( A{j} ) + fse;
-            
-            delta{j}   = (theta_k'  * delta_k) .* gradient;
-            
-            % accumulate deltas over the complete batch;
-            % the input of the first layer is the actual training input.
-            layer_input = X{i};
-            if j > 1
-                layer_input = Z{j-1};
-            end
-            change_theta{j} = change_theta{j} + delta{j} * layer_input';
-            change_bias{j}  = change_bias{j}  + delta{j} * 1;
+
+    % accumulate the total cost, as well as the combined
+    % weight changes over all training examples
+    % --------------------------------------------------
+
+    cost = 0;
+    weight_changes = cell(numel(L), 1);
+
+    % initialize the cumulative weight changes to zero
+    for t=1:numel(L)
+        weight_changes{t} = zeros(size(L{t}.theta));
+    end
+
+    for t=1:numel(training_results)
+
+        % for each layer, accumulate the weight change
+        for w=1:numel(L)
+            weight_changes{w} = weight_changes{w} + training_results{t}.weight_changes{w};
         end
-        
-    end % for each training sample
 
-    % update the hidden and output layer weights
-    for j=1:N_layers          
-        L{j}.theta = L{j}.theta + eta * change_theta{j} ...
-                                +  my * prev_change_theta{j};
-        L{j}.bias  = L{j}.bias  + eta * change_bias{j} ...
-                                +  my * prev_change_bias{j};
+        % also sum the costs
+        cost = cost + training_results{t}.cost;
+
     end
-    
-    % keeping the current values for momentum-based descent
-    prev_change_theta = change_theta;
-    prev_change_bias = change_bias;
-    
-    % adjust the cost for all samples
-    J(k) = J(k) / numel(range);
-    
-    % assume J(theta) is still good here; early exit the process
-    if (k >= M_epochs) && (J(k) <= threshold)
-        J = J(1:k); % trim away unused slots
-        break;
+
+    % normalize the cost
+    cost     = cost / numel(training_results);
+    costs(k) = cost;
+
+    % normalize the gradients
+    for w=1:numel(L)
+        weight_changes{w} = weight_changes{w} / numel(training_results);
     end
-end
+
+
+
+    % TODO: check the change in cost and terminate if it doesn't move
+
+
+    % Gradient Descent
+    % ----------------
+
+    for l=1:numel(L)
+        L{l}.theta = L{l}.theta ...
+            - eta * weight_changes{l} ...
+            -  my * previous_weight_changes{l};
+        
+        % Store the delta as the previous delta for momentum descent
+        previous_weight_changes{l} = eta * weight_changes{l};
+    end
+
+end % for k epochs
+
 
 
 % Test execution of the network
@@ -209,24 +253,15 @@ end
 
 disp('Trained network:');
 
-for i=1:numel(X)
-    z = X{i};
-
-    for j=1:numel(L)
-        weights = L{j}.theta;
-        bias    = L{j}.bias;
-        sigma   = L{j}.sigma;
-        
-        a = weights*z + bias;
-        z = sigma(a);
-    end
+for t=1:numel(X)     % ... for each training sample ...
     
-    disp([ '  h( ' mat2str(X{i}) ' ) = ' mat2str(z) ]);
+    x = X{t};
+    a = feedforward(L, x);
+    
+    disp([ '  h( ' mat2str(X{t}) ' ) = ' mat2str(a) ]);
 end
 
-close all;
-figure;
-plot(J); hold on;
-ylabel('J(\theta)'); xlabel('Generation');
-ylim([0 max(J)]);
-xlim([0 numel(J)]);
+close all; figure;
+plot(costs);
+xlabel('Generation');
+ylabel('J(\theta)');
