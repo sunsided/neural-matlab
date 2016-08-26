@@ -93,11 +93,15 @@ N_epochs_max = 2e4;             % max. number of training rounds
 N_epochs_min = 3e3;             % min. number of training rounds
 
 % Select the gradient descent algorithm
-gradient_descent = momentum_gradient_descent( ...
-                    L, ...
-                    'learning_rate', 1.0, ...
-                    'momentum', 0.1);
+%gradient_descent = momentum_gradient_descent( ...
+%                    L, ...
+%                    'learning_rate', 1.0, ...
+%                    'momentum', 0.1);
 
+gradient_descent = accelerated_gradient_descent( ...
+                    L, ...
+                    'acceleration', 1.5);
+                
 % Flat spot elimination helps Gradient Descent in very flat error
 % surface areas by suggesting some (fake) gradient to move along.
 fse          = 0.1;            % flat spot elimination amount
@@ -113,7 +117,7 @@ for k=1:N_epochs_max
 
     % running batches of Q randomly chosen examples (per epoch);
     % this makes this approach a Stochastic Gradient Descent.
-    Q = 20;
+    Q = 10;
     range = randi(numel(X), 1, Q);
     %range = mod(k-1, numel(X))+1;
 
